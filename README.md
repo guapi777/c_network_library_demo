@@ -135,7 +135,11 @@ OpenSSL是一个开源的安全套接字层协议库，提供了很多加密算�
 
 
 
-### structs
+### 1. structs
+
+#### SSL
+
+SSL是一个具体的SSL/TLS连接对象，代表了一个客户端与服务端之间的安全通道。SSL_CTX对象是创建SSL对象的模板，一个SSL对象必须要与一个SSL_CTX对象关联，才能进行握手和数据传输等操作。在握手过程中，SSL对象会从SSL_CTX对象中获取相关配置信息，例如加密算法、证书、私钥等等，然后通过握手协议和服务端建立安全通道。
 
 #### SSL_CTX
 
@@ -155,9 +159,149 @@ SSL是一个具体的SSL/TLS连接对象，代表了一个客户端与服务端�
 
 在使用 OpenSSL 进行 SSL 通信时，通常需要先创建一个 SSL_CTX 对象，然后使用该对象创建一个 SSL 会话上下文，最后通过该上下文对象创建 SSL 连接。
 
-#### SSL
+#### SSL_METHOD
 
-SSL是一个具体的SSL/TLS连接对象，代表了一个客户端与服务端之间的安全通道。SSL_CTX对象是创建SSL对象的模板，一个SSL对象必须要与一个SSL_CTX对象关联，才能进行握手和数据传输等操作。在握手过程中，SSL对象会从SSL_CTX对象中获取相关配置信息，例如加密算法、证书、私钥等等，然后通过握手协议和服务端建立安全通道。
+```c
+typedef struct ssl_method_st {
+    int version; // SSL/TLS 版本号
+    int (*ssl_new)(SSL *s); // 创建 SSL 对象的函数指针
+    void (*ssl_clear)(SSL *s); // 清除 SSL 对象的函数指针
+    void (*ssl_free)(SSL *s); // 释放 SSL 对象的函数指针
+    int (*ssl_accept)(SSL *s); // SSL/TLS 握手过程中服务端接收客户端请求的函数指针
+    int (*ssl_connect)(SSL *s); // SSL/TLS 握手过程中客户端发起请求的函数指针
+    int (*ssl_read)(SSL *s, void *buf, int len); // SSL/TLS 加密数据读取的函数指针
+    int (*ssl_peek)(SSL *s, void *buf, int len); // SSL/TLS 加密数据读取（但不删除）的函数指针
+    int (*ssl_write)(SSL *s, const void *buf, int len); // SSL/TLS 加密数据写入的函数指针
+    int (*ssl_shutdown)(SSL *s); // SSL/TLS 关闭连接的函数指针
+    int (*ssl_renegotiate)(SSL *s); // SSL/TLS 重新协商连接的函数指针
+    long (*ssl_ctrl)(SSL *s, int cmd, long larg, void *parg); // SSL/TLS 控制命令的函数指针
+    long (*ssl_ctx_ctrl)(SSL_CTX *ctx, int cmd, long larg, void *parg); // SSL/TLS 上下文控制命令的函数指针
+    const SSL_CIPHER *(*get_cipher_by_char)(const unsigned char *ptr); // 根据字符串表示获取 SSL_CIPHER 的函数指针
+    int (*put_cipher_by_char)(const SSL_CIPHER *cipher, unsigned char *ptr); // 将 SSL_CIPHER 转换为字符串表示的函数指针
+    int (*ssl_pending)(const SSL *s); // SSL/TLS 还未读取的已解密数据长度的函数指针
+    int (*num_ciphers)(void); // SSL/TLS 支持的加密算法数目的函数指针
+    const SSL_CIPHER *(*get_cipher)(unsigned ncipher); // 根据索引获取 SSL_CIPHER 的函数指针
+    const struct ssl3_enc_method *ssl3_enc; // SSL3 加密方法的结构体指针
+    int (*ssl_version)(void); // SSL/TLS 版本的函数指针
+    long (*ssl_callback_ctrl)(SSL *s, int cb_id, void (*fp)(void)); // SSL/TLS 回调控制命令的函数指针
+} SSL_METHOD;
+
+```
+
+
+
+SSL_METHOD 结构体包含了一系列函数指针和数据成员，用于描述 SSL/TLS 协议的方法和版本。常用的成员变量如下：
+
+- version：SSL/TLS 协议的版本号，可以是 SSL2_VERSION、SSL3_VERSION、TLS1_VERSION、TLS1_1_VERSION、TLS1_2_VERSION 等。
+- ssl_new：创建 SSL 对象的函数指针。
+
+- ssl_clear：清除 SSL 对象的函数指针，用于释放 SSL 对象的内存。
+- ssl_free：释放 SSL 对象的函数指针，用于释放 SSL 对象的内存。
+- ssl_accept：SSL/TLS 握手过程中服务端接收客户端请求的函数指针，用于实现服务端的 SSL/TLS 握手逻辑。
+- ssl_connect：SSL/TLS 握手过程中客户端发起请求的函数指针，用于实现客户端的 SSL/TLS 握手逻辑。
+- ssl_read：SSL/TLS 加密数据读取的函数指针，用于从 SSL/TLS 连接中读取加密数据。
+- ssl_peek：SSL/TLS 加密数据读取（但不删除）的函数指针，用于从 SSL/TLS 连接中读取加密数据，但不删除已读取的数据。
+- ssl_write：SSL/TLS 加密数据写入的函数指针，用于向 SSL/TLS 连接中写入加密数据。
+- ssl_shutdown：SSL/TLS 关闭连接的函数指针，用于实现 SSL/TLS 连接的关闭逻辑。
+- ssl_renegotiate：SSL/TLS 重新协商连接的函数指针，用于重新协商 SSL/TLS 连接。
+- ssl_ctrl：SSL/TLS 控制命令的函数指针，用于实现 SSL/TLS 的控制命令。
+- ssl_ctx_ctrl：SSL/TLS 上下文控制命令的函数指针，用于实现 SSL/TLS 上下文的控制命令。
+- get_cipher_by_char：根据字符串表示获取 SSL_CIPHER 的函数指针，用于从字符串中解析出 SSL_CIPHER。
+- put_cipher_by_char：将 SSL_CIPHER 转换为字符串表示的函数指针，用于将 SSL_CIPHER 转换为字符串。
+- ssl_pending：SSL/TLS 还未读取的已解密数据长度的函数指针，用于获取 SSL/TLS 还未读取的已解密数据长度。
+- num_ciphers：SSL/TLS 支持的加密算法数目的函数指针，用于获取 SSL/TLS 支持的加密算法数目。
+- get_cipher：根据索引获取 SSL_CIPHER 的函数指针，用于获取 SSL/TLS 支持的加密算法。
+- ssl3_enc：SSL3 加密方法的结构体指针，用于实现 SSL3 加密方法。
+- ssl_version：SSL/TLS 版本的函数指针，用于获取 SSL/TLS 版本。
+- ssl_callback_ctrl：SSL/TLS 回调控制命令的函数指针，用于实现 SSL/TLS 回调控制命令。
+
+### 2. methods
+
+#### SSL_library_init()
+
+SSL_library_init() 是 OpenSSL 库中的一个函数，它用于初始化 OpenSSL 库的 SSL/TLS 实现。它的作用是确保 OpenSSL 库已经正确地初始化，以便其他 SSL/TLS 相关的操作可以正常进行。
+
+在使用 OpenSSL 库进行 SSL/TLS 通信时，通常需要先调用 SSL_library_init() 函数，以确保 OpenSSL 库已经正确地初始化。这通常在程序的初始化阶段完成。如果未正确初始化 OpenSSL 库，则可能会导致程序崩溃、内存泄漏或其他错误。
+
+需要注意的是，如果程序中已经有 SSL 上下文（SSL context）对象被创建，那么在调用 SSL_library_init() 函数之前必须先调用 SSL_CTX_set_default_verify_paths() 函数，以确保 OpenSSL 库能够找到默认的证书验证路径。
+
+总之，SSL_library_init() 函数是 OpenSSL 库中非常重要的一个函数，它的作用是确保 OpenSSL 库已经正确地初始化，为 SSL/TLS 通信做好准备。
+
+#### OpenSSL_add_all_algorithms()
+
+OpenSSL_add_all_algorithms() 是 OpenSSL 库中的一个函数，它用于加载所有支持的加密算法，包括对称加密算法、哈希算法、公钥加密算法和签名算法等。它的作用是确保 OpenSSL 库已经加载了所有支持的加密算法，以便其他加密相关的操作可以正常进行。
+
+在使用 OpenSSL 库进行加密操作时，通常需要先调用 OpenSSL_add_all_algorithms() 函数，以确保 OpenSSL 库已经加载了所有支持的加密算法。这通常在程序的初始化阶段完成。如果未正确加载所有支持的加密算法，则可能会导致程序无法正常进行加密操作。
+
+需要注意的是，如果程序只需要使用特定的加密算法，可以只加载特定的算法库，而不是加载所有支持的算法库。这可以通过调用特定的加载算法库函数（例如 EVP_add_cipher() 和 EVP_add_digest()）来实现。
+
+总之，OpenSSL_add_all_algorithms() 函数是 OpenSSL 库中非常重要的一个函数，它的作用是确保 OpenSSL 库已经加载了所有支持的加密算法，为加密相关的操作做好准备。
+
+#### SSL_load_error_strings()
+
+SSL_load_error_strings() 是 OpenSSL 库中的一个函数，它用于加载 SSL/TLS 错误消息字符串。它的作用是将 OpenSSL 库中的错误消息字符串加载到错误消息缓冲区中，以便可以使用 OpenSSL 库中的错误处理函数（例如 ERR_error_string()）输出相应的错误消息。
+
+在使用 OpenSSL 库进行 SSL/TLS 通信时，如果出现了错误，需要使用 OpenSSL 库中的错误处理函数来获取错误消息。如果在调用错误处理函数之前未调用 SSL_load_error_strings() 函数，可能无法获取正确的错误消息。
+
+需要注意的是，SSL_load_error_strings() 函数只需要在程序的初始化阶段调用一次即可，它会将错误消息字符串加载到一个全局缓冲区中。如果在程序的其他地方需要使用错误处理函数获取错误消息，不需要再次调用 SSL_load_error_strings() 函数。
+
+总之，SSL_load_error_strings() 函数是 OpenSSL 库中非常重要的一个函数，它的作用是将 SSL/TLS 错误消息字符串加载到错误消息缓冲区中，为获取错误消息做好准备。
+
+#### TLS_client_method()
+
+TLS_client_method() 是 OpenSSL 库中的一个函数，它用于创建一个 SSL_METHOD 对象，表示客户端使用 TLS/SSL 进行通信的加密方法。具体来说，TLS_client_method() 创建的 SSL_METHOD 对象是用于客户端与服务器进行 SSL/TLS 通信的方法。在创建 SSL_CTX 对象时，通常需要使用类似于 TLS_client_method() 这样的函数指定使用的加密方法。
+
+TLS_client_method() 的作用是创建一个 SSL_METHOD 对象，该对象包含了客户端使用 TLS/SSL 加密进行通信时所需要的方法。具体来说，SSL_METHOD 对象包含了 SSL/TLS 协议版本、加密算法、握手过程、加密处理等方法的实现。在创建 SSL_CTX 对象时，需要指定使用的 SSL_METHOD，以便后续使用 SSL_connect() 或 SSL_accept() 函数建立 SSL/TLS 连接。
+
+#### SSL_CTX_new()
+
+SSL_CTX_new() 函数的输入参数是 SSL_METHOD对象，用于创建特定的 SSL 方法和选项。
+
+SSL_METHOD 对象表示 SSL/TLS 连接所使用的加密协议和方法，例如 SSLv3、TLSv1.2 等。如果需要使用特定的 SSL/TLS 协议或方法，可以通过创建相应的 SSL_METHOD 对象来实现。常用的 SSL_METHOD 对象有 SSLv23_method()、TLSv1_2_method() 等。
+
+SSL_CTX_new() 函数的输出是一个指向 SSL_CTX 结构体的指针，该结构体表示创建的 SSL 上下文对象。该对象包含了 SSL/TLS 通信所需的所有信息，可以通过 SSL/TLS 连接进行访问和配置。
+
+需要注意的是，SSL_CTX_new() 函数只需要在程序的初始化阶段调用一次即可，可以在程序中使用多个 SSL/TLS 连接共享同一个 SSL 上下文对象。如果需要为不同的 SSL/TLS 连接使用不同的 SSL 上下文对象，可以多次调用 SSL_CTX_new() 函数，每次创建一个新的 SSL 上下文对象。
+
+#### ERR_print_errors_fp()
+
+ERR_print_errors_fp() 是 OpenSSL 库中的一个函数，它用于将 OpenSSL 中产生的错误信息输出到指定的文件流中，通常用于调试和错误处理。
+
+ERR_print_errors_fp() 的输入是一个文件流指针，可以是标准输出、标准错误、日志文件等任意文件流指针。它的输出是将 OpenSSL 中产生的错误信息输出到指定的文件流中。输出的信息包括错误码、错误原因、错误文件名和行号等详细信息，有助于进行错误诊断和调试。
+
+该函数还有一个类似的函数 ERR_print_errors()，不同的是它的输出不是写入文件流，而是返回一个字符串。两个函数的使用方式类似，通常需要在代码中添加错误处理逻辑，以便在程序发生错误时及时发现和解决问题。
+
+#### BIO_new_connect()
+
+```c
+BIO *BIO_new_connect(const char *host_port);
+```
+
+BIO_new_connect() 是 OpenSSL 中的一个函数，用于创建一个连接到指定主机和端口的 BIO 对象，BIO 对象可以用于进行加密通信。BIO 对象是 OpenSSL 中的一种抽象数据类型，用于提供一种统一的接口，使得加密通信可以透明地进行，而不需要关心底层协议的细节。BIO_new_connect() 的输入是主机名和端口号，输出是一个指向 BIO 对象的指针。
+
+其中，host_port 参数是一个字符串，表示主机名和端口号。它的格式为 "host:port"，比如 "[www.example.com:443](http://www.example.com:443/)" 表示连接到 [www.example.com](http://www.example.com/) 的 443 端口。BIO_new_connect() 函数会根据指定的主机名和端口号创建一个 TCP 连接，并返回一个指向新创建的 BIO 对象的指针。如果连接失败，则返回 NULL。需要注意的是，在使用 BIO_new_connect() 函数之前，必须先调用 SSL_library_init()、OpenSSL_add_all_algorithms() 和 SSL_load_error_strings() 等函数进行初始化，以确保 OpenSSL 库能够正常工作。
+
+#### SSL_new()
+
+```c
+SSL *SSL_new(SSL_CTX *ctx);
+```
+
+SSL_new() 是 OpenSSL 中的一个函数，用于创建一个 SSL 对象，SSL 对象用于进行加密通信。SSL 对象是 OpenSSL 中的一种抽象数据类型，封装了底层的加密协议（如 TLS/SSL）以及加密算法，可以方便地进行加密通信。SSL_new() 的输入是一个 SSL_CTX 对象，用于指定 SSL 上下文，输出是一个指向 SSL 对象的指针。
+
+其中，ctx 参数是一个指向 SSL 上下文的指针，它包含了 SSL 对象所需的一些配置信息，如加密算法、证书、私钥等。SSL_new() 函数会根据指定的 SSL 上下文创建一个新的 SSL 对象，并返回一个指向该对象的指针。如果创建失败，则返回 NULL。需要注意的是，在使用 SSL_new() 函数之前，必须先调用 SSL_library_init()、OpenSSL_add_all_algorithms() 和 SSL_load_error_strings() 等函数进行初始化，以确保 OpenSSL 库能够正常工作。同时，还需要使用 SSL_set_fd() 函数将 SSL 对象与 TCP 连接关联起来，以便进行加密通信。
+
+#### SSL_set_tlsext_host_name()
+
+SSL_set_tlsext_host_name() 是 OpenSSL 中的一个函数，用于设置 TLS 扩展中的主机名（Server Name Indication，SNI）。SNI 是 TLS 协议的一个扩展，用于在建立 TLS 连接时指定要连接的服务器的主机名，以支持一个 IP 地址下的多个虚拟主机。SSL_set_tlsext_host_name() 的输入是一个 SSL 对象和一个主机名，输出为空。
+
+具体而言，SSL_set_tlsext_host_name() 函数的语法如下：
+
+```c
+int SSL_set_tlsext_host_name(SSL *ssl, const char *name);
+```
+
+其中，ssl 参数是一个指向 SSL 对象的指针，name 参数是一个字符串，表示要连接的服务器的主机名。SSL_set_tlsext_host_name() 函数会将指定的主机名设置为 SSL 对象的 TLS 扩展中的主机名，以便在建立 TLS 连接时使用。如果设置成功，则返回 1；否则返回 0。需要注意的是，SSL_set_tlsext_host_name() 函数必须在 SSL_connect() 函数之前调用，以确保在建立 TLS 连接时正确地使用 SNI 扩展。同时，还需要确保 OpenSSL 库的版本号不低于 1.0.2，以支持 SNI 扩展。
 
 ## wslay
 
@@ -255,22 +399,7 @@ struct wslay_event_callbacks {
 
 通过设置这些回调函数，我们可以在 WebSocket 连接中处理各种事件。例如，在 `on_msg_recv_callback` 中，我们可以处理完整的消息，然后在 `send_callback` 中发送响应。在 `on_close_callback` 中，我们可以清理资源并关闭连接。
 
-#### genmask_callback
 
-`genmask_callback` 是 Wslay 库中的一个回调函数类型，用于生成 WebSocket 数据帧的掩码，只有在初始化 WebSocket 客户端使用的事件驱动 API 时才需要使用。
-
-在 WebSocket 协议中，客户端发送的所有数据帧都必须进行掩码操作，而服务器发送的数据帧则不能进行掩码操作。因此，当 WebSocket 客户端发送数据帧时，需要生成掩码，这个回调函数就是用来完成这个任务的。
-
-此回调函数的输入参数包括：
-
-- `wslay_event_context_ptr ctx`：指向 Wslay WebSocket 事件上下文结构体的指针。
-- `uint8_t *buf`：指向掩码数据的指针。
-- `size_t len`：掩码数据的长度。
-- `void *user_data`：用户数据指针，用于传递用户自定义数据。
-
-此回调函数的返回值为整型，表示生成掩码的结果。如果生成掩码成功，返回值为 0；如果出现错误，返回值为 -1。如果出现错误，还需要使用 `wslay_event_set_error()` 函数设置错误代码为 `WSLAY_ERR_CALLBACK_FAILURE`。
-
-当 WebSocket 客户端需要发送数据帧时，会调用 `wslay_event_send()` 函数，并在需要时调用 `genmask_callback` 函数生成掩码。在 `genmask_callback` 函数中，需要将生成的掩码数据填充到 `buf` 中，并确保填充的字节数为 `len`。如果返回值为 0，表示成功生成掩码；如果返回值为 -1，表示生成掩码失败。
 
 ### 2. methods
 
@@ -296,9 +425,7 @@ typedef int (*wslay_event_frame_recv_callback)
 #### wslay_event_context_client_init()
 
 ```c
-int wslay_event_context_client_init(wslay_event_context_ptr* ctx_ptr,
-                                    const struct wslay_event_callbacks* callbacks,
-                                    void* user_data);
+int wslay_event_context_client_init(wslay_event_context_ptr* ctx_ptr, const struct wslay_event_callbacks* callbacks, void* user_data);
 ```
 
 `wslay_event_context_client_init()` 是一个函数，用于初始化一个 WebSocket 客户端的事件上下文。
@@ -351,7 +478,7 @@ int wslay_event_context_client_init(wslay_event_context_ptr* ctx_ptr,
 - `wslay_event_context *ctx`：一个指向 Wslay WebSocket 事件上下文结构体的指针。
 - `const struct wslay_event_msg *msg`：一个指向要发送的 WebSocket 消息结构体的指针。
 
-函数的输出是一个整数，表示消息是否成功发送。如果返回值为零，表示消息未能成功发送。
+函数的输出是一个整数，表示消息是否成功发送。如果返回值为零，表示消息已经成功发送。
 
 通过调用此函数，我们可以直接发送 WebSocket 消息，而不是将消息压入事件队列中等待事件处理器发送。这种方法虽然可以简单地发送消息，但也有可能出现阻塞的情况，从而降低 WebSocket 连接的性能和稳定性。因此，建议使用 `wslay_event_queue_push()` 函数将要发送的消息压入事件队列中，等待事件处理器处理并发送消息。
 
@@ -386,6 +513,67 @@ int wslay_event_context_client_init(wslay_event_context_ptr* ctx_ptr,
 函数的输入参数是一个指向要释放的上下文结构体的指针（`wslay_event_context **ctx_ptr`）。在函数执行结束后，该指针将被设置为 `NULL`。
 
 函数没有输出。释放操作在函数内部完成，而不是返回值。
+
+#### wslay_event_queue_msg()
+
+该函数用于将指定的WebSocket协议消息加入发送队列中。此函数支持控制和非控制消息，给定的消息会被不分片地发送。如果需要进行分片传输，应使用wslay_event_queue_fragmented_msg()函数。
+
+此函数只是将消息加入队列中，而不是立即发送它。调用wslay_event_send()函数可以将这些队列中的消息发送出去。
+
+wslay_event_queue_msg()函数返回0表示成功，否则返回以下负错误代码之一：
+
+- WSLAY_ERR_NO_MORE_MSG：无法将给定消息加入队列中。可能的原因之一是已经排队/发送了关闭控制帧，不允许进一步排队消息。
+- WSLAY_ERR_INVALID_ARGUMENT：给定的消息无效。
+- WSLAY_ERR_NOMEM：内存不足。
+
+总之，该函数是wslay库中的一个重要功能，用于将WebSocket协议消息加入到发送队列中，确保消息能够正确地发送和接收。在使用wslay库的过程中，需要适时地调用该函数，以确保消息能够被成功发送。
+
+#### wslay_event_recv_callback()
+
+这段代码定义了一个名为wslay_event_recv_callback的函数指针类型。该函数指针接受五个参数：
+
+1. wslay_event_context_ptr ctx：指向wslay事件上下文结构的指针。
+2. uint8_t *buf：指向包含接收数据的缓冲区的指针。
+3. size_t len：缓冲区的长度。
+4. int flags：接收数据的标志位。
+5. void *user_data：指向用户数据的指针。
+
+该函数指针的返回值为ssize_t类型，表示已成功接收的字节数。该函数指针用于在wslay事件上下文中指定接收数据时的回调函数。
+
+当使用wslay库处理WebSocket消息时，用户需要定义一个用于接收WebSocket消息的回调函数。回调函数将被传递到wslay_event_context中，以便在接收到WebSocket消息时调用。此处的回调函数类型即为wslay_event_recv_callback。回调函数将接收指向包含WebSocket消息的缓冲区的指针以及缓冲区的长度，并返回已成功接收的字节数。
+
+使用这种回调函数的方式可以在接收数据时提供更多的灵活性和可定制性。它允许用户定义自己的接收数据逻辑，并可以处理任何类型的数据，而不仅仅是WebSocket消息。
+
+#### wslay_genmask_callback()
+
+`genmask_callback` 是 Wslay 库中的一个回调函数类型，用于生成 WebSocket 数据帧的掩码，只有在初始化 WebSocket 客户端使用的事件驱动 API 时才需要使用。
+
+在 WebSocket 协议中，客户端发送的所有数据帧都必须进行掩码操作，而服务器发送的数据帧则不能进行掩码操作。因此，当 WebSocket 客户端发送数据帧时，需要生成掩码，这个回调函数就是用来完成这个任务的。
+
+此回调函数的输入参数包括：
+
+- `wslay_event_context_ptr ctx`：指向 Wslay WebSocket 事件上下文结构体的指针。
+- `uint8_t *buf`：指向掩码数据的指针。
+- `size_t len`：掩码数据的长度。
+- `void *user_data`：用户数据指针，用于传递用户自定义数据。
+
+此回调函数的返回值为整型，表示生成掩码的结果。如果生成掩码成功，返回值为 0；如果出现错误，返回值为 -1。如果出现错误，还需要使用 `wslay_event_set_error()` 函数设置错误代码为 `WSLAY_ERR_CALLBACK_FAILURE`。
+
+当 WebSocket 客户端需要发送数据帧时，会调用 `wslay_event_send()` 函数，并在需要时调用 `genmask_callback` 函数生成掩码。在 `genmask_callback` 函数中，需要将生成的掩码数据填充到 `buf` 中，并确保填充的字节数为 `len`。如果返回值为 0，表示成功生成掩码；如果返回值为 -1，表示生成掩码失败。
+
+#### wslay_event_send_callback()
+
+回调函数在wslay_event_send()需要向远程端点发送更多数据时被调用。函数需要将最多len字节的数据发送给远程端点，并返回实际发送的字节数。flags参数是以下标志位的按位或：
+
+- WSLAY_MSG_MORE：表示还有更多数据需要发送。
+
+这些标志位提供了一些提示，用于优化性能和行为。
+
+如果发生错误，函数需要返回-1并设置错误代码WSLAY_ERR_CALLBACK_FAILURE。wslay的事件驱动API假定使用的是非阻塞I/O。如果错误原因是EAGAIN或EWOULDBLOCK，则应设置WSLAY_ERR_WOULDBLOCK。这很重要，因为它告诉wslay_event_send()停止发送数据并返回。
+
+总之，该回调函数用于发送WebSocket协议消息的数据，是实现WebSocket通信的关键部分之一。在使用wslay库的过程中，需要编写合适的回调函数，以确保数据能够正确地发送和接收。
+
+
 
 ### 3. binance webscoket
 
@@ -466,6 +654,35 @@ struct addrinfo {
 
 - `ai_next`：指向一个 addrinfo 结构体的指针，用于存储下一个地址信息。当使用 getaddrinfo 函数获取多个地址信息时，返回的地址信息会形成一个链表，ai_next 指向下一个地址信息结构体。
 
+#### sockaddr
+
+```c
+struct sockaddr {
+    unsigned short sa_family;    // 地址族，如AF_INET、AF_INET6等
+    char sa_data[14];           // 地址信息，如IP地址、端口号等
+};
+```
+
+`sockaddr` 是一个通用的套接字地址结构，用于表示不同协议族的套接字地址。它定义在 `<sys/socket.h>` 头文件中，并且被其他特定协议族的地址结构（如 `sockaddr_in`、`sockaddr_in6` 等）所使用。
+
+其中，`sa_family` 表示地址族，可以为 `AF_INET`（IPv4）、`AF_INET6`（IPv6）等等，`sa_data` 表示具体的地址信息。对于 `sockaddr` 结构体而言，`sa_data` 的长度是固定的，为14个字节，其中具体的地址信息是与地址族相关的。
+
+由于 `sockaddr` 结构体的 `sa_data` 是一个数组，无法确定其具体的含义，因此在实际使用时，需要根据不同的协议族使用对应的地址结构体（如 `sockaddr_in`、`sockaddr_in6` 等），这些结构体都包含了 `sockaddr` 结构体，并且定义了更具体的成员变量来表示具体的地址信息。
+
+#### sigaction
+
+`sigaction` 是一个结构体，用于描述和处理信号的行为。它定义在头文件 `<signal.h>` 中。
+
+它的成员变量如下：
+
+- `void (*sa_handler)(int)`: 信号处理函数的地址或者是 `SIG_DFL`，表示采用默认的信号处理方式；或者是 `SIG_IGN`，表示忽略该信号。这个函数的参数是信号值 `int`。
+- `void (*sa_sigaction)(int, siginfo_t *, void *)`: 用于处理信号的更高级的函数，如果设置了这个函数，那么 `sa_handler` 将被忽略。这个函数的参数是信号值 `int`、`siginfo_t *` 类型的指针和 `void *` 类型的指针，分别表示信号值、有关信号的附加信息和上下文。
+- `sigset_t sa_mask`: 当前处理信号时，需要屏蔽的信号集。即，当处理一个信号时，如果在处理期间收到了 sa_mask 中的任何一个信号，那么它们都会被挂起，等到该信号处理完毕之后才会被处理。
+- `int sa_flags`: 标志位，用于指定在处理该信号时的一些行为。可能的取值如下：
+  - `SA_RESTART`: 如果信号处理器被信号中断，那么自动重启系统调用（当进程调用阻塞系统调用时，如果该信号处理器不使用 SA_RESTART 标志，那么该系统调用就会被中断并返回 EINTR 错误码）。
+  - `SA_NOCLDSTOP`: 如果子进程停止或继续，不产生 `SIGCHLD` 信号。
+  - `SA_SIGINFO`: 说明在 sa_sigaction 成员中使用了更高级别的信号处理器。
+
 ### 2. methods
 
 #### getaddrinfo()
@@ -518,6 +735,20 @@ int fprintf(FILE *stream, const char *format, ...);
 其中，`stream` 参数指定输出的流，可以是 `stdout`、`stderr` 或者其它用户自定义的流。`format` 参数是一个字符串，它包含了输出的格式信息，与 `printf()` 函数中的格式化字符串相同。`...` 表示可变参数列表，用于按照格式字符串中的格式将后续参数输出到指定的输出流中。
 
 `fprintf()` 函数的输入参数是输出流、格式化字符串和可变参数列表，可以根据需要动态指定输出流和输出格式。相比于 `printf()` 函数，`fprintf()` 函数的优点在于它可以将输出重定向到指定的输出流，可以实现灵活的输出控制，比如将输出保存到文件中、将输出发送到远程服务器等。
+
+#### snprintf()
+
+```c
+int snprintf(char *str, size_t size, const char *format, ...);
+```
+
+`snprintf()` 是 C 语言中的一个函数，用于将格式化的数据写入字符串缓冲区中。
+
+其中 `str` 是一个指向要写入的字符串缓冲区的指针，`size` 是缓冲区的大小，`format` 是一个字符串格式化参数，后面的 `...` 是可变参数列表。
+
+`snprintf()` 的作用是将格式化的数据按照指定的格式写入到缓冲区中，它的输出结果可以用作日志输出、调试信息输出、错误信息输出等。与 `printf()` 不同的是，`snprintf()` 不会把输出结果直接写到标准输出或文件中，而是将其写入到指定的字符串缓冲区中。此外，由于 `snprintf()` 会检查缓冲区的大小，因此可以避免缓冲区溢出的问题。
+
+需要注意的是，`snprintf()` 函数返回值为写入到缓冲区中的字符数，如果发生截断，则返回实际需要的字符数（不包括字符串结尾的 '\0'）。如果写入的字符数大于等于缓冲区的大小，则返回负数，表示缓冲区溢出的错误。
 
 #### socket()
 
@@ -581,3 +812,155 @@ send()函数通常在网络编程中用于向已连接的套接字（socket）�
 4. flags: 可选参数，通常设置为0。
 
 send()函数的作用是将指定长度的数据从指定指针缓冲区发送到已连接的套接字。它返回实际发送的字节数，如果出现错误，则返回-1。可以使用errno变量来查看发生了什么错误。
+
+#### write()
+
+```c
+#include <unistd.h>
+
+ssize_t write(int fd, const void *buf, size_t count);
+```
+
+write()函数是C语言中的一个系统调用，用于向已打开的文件描述符（file descriptor）中写入数据。
+
+其中，`fd`是文件描述符，`buf`是要写入的数据的指针，`count`是要写入的数据字节数。
+
+函数返回值是成功写入的字节数，如果返回值小于`count`，则表示写入操作未完全成功，可能是由于磁盘已满或者管道写入端被关闭等原因。
+
+如果函数执行失败，返回值为-1，此时需要根据`errno`变量来获取错误信息。
+
+一般地，使用write()函数的步骤为：
+
+1. 打开文件，获取文件描述符；
+2. 调用write()函数，向文件中写入数据；
+3. 关闭文件。
+
+该函数通常用于在C语言中进行文件写入操作，也可用于网络编程中，向套接字（socket）写入数据。
+
+#### sigaction()
+
+```c
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+```
+
+它的参数意义如下：
+
+- `signum`：表示要操作的信号编号。
+- `act`：表示要设置的新信号处理方式，是一个指向 `struct sigaction` 结构体的指针。如果为 `NULL`，表示不改变原有信号处理方式。
+- `oldact`：是一个指向 `struct sigaction` 结构体的指针，用于存储原有的信号处理方式，可以为 `NULL`。
+
+函数返回值为 0 表示成功，否则表示失败。
+
+### 3.class
+
+#### string
+
+在 C++ 中，`string` 是标准库提供的一个字符串类型。`string` 类的定义在头文件 `<string>` 中，其常用的成员函数有：
+
+- `string::string()`：构造一个空字符串。
+- `string::string(const char*)`：将 C 风格字符串转化为 `string` 类型。
+- `string::string(const string&)`：拷贝构造函数，将一个 `string` 对象拷贝到另一个 `string` 对象中。
+- `string::operator=()`：重载赋值运算符，用于将一个 `string` 对象的值赋给另一个 `string` 对象。
+- `string::operator+()`：重载加法运算符，用于将两个 `string` 对象连接起来。
+- `string::size()`：返回字符串的长度。
+- `string::empty()`：判断字符串是否为空。
+- `string::clear()`：清空字符串。
+- `string::c_str()`：返回一个指向字符串首字符的指针。
+- `string::data()`：返回一个指向字符串首字符的指针。
+- `string::find()`：查找字符串中第一次出现某个字符或子字符串的位置。
+- `string::substr()`：返回一个子字符串。
+
+`string` 类的常用成员变量有：
+
+- `char* data`：指向存储字符串的字符数组的指针。
+- `size_t length`：表示字符串的长度，不包括结尾的空字符。
+- `size_t capacity`：表示当前字符数组的容量。
+
+需要注意的是，`string` 类的成员变量和实现细节在不同的编译器和操作系统下可能有所不同，上述只是其中的一些常见成员变量和函数。
+
+#### ostringstream
+
+ostringstream 是 C++ 标准库中的一个类，定义在头文件 <sstream> 中，它是一个流类，用于将各种数据类型转换成字符串。ostringstream 通常用于将各种类型的数据格式化成字符串，比如将数字转换成字符串，将变量和字符串拼接成一个完整的字符串等。
+
+ostringstream 类继承自 ostream 类，支持 ostream 类的所有输出操作符，例如 << 操作符。与 ostream 类不同的是，ostringstream 类还提供了一个成员函数 str()，可以获取当前字符串流中的字符串值。可以将该值赋给一个 std::string 对象，从而实现将数据类型转换成字符串的功能。
+
+ostringstream 类的常见用法是在 C++ 程序中将各种数据类型转换成字符串。例如，可以使用 ostringstream 类将整数、浮点数、字符串等数据类型转换成字符串，然后将它们拼接在一起，最终输出一个完整的字符串。也可以使用 ostringstream 类来格式化输出一些特定的信息，比如日志信息、调试信息等。
+
+ostringstream 常见的成员函数包括：
+
+- << 操作符：用于向字符串流中插入数据。
+- str()：获取当前字符串流中的字符串值。
+- str(const std::string&)：将字符串流的内容设置为指定的字符串。
+- tellp()：获取当前插入位置的偏移量。
+- seekp()：设置插入位置的偏移量。
+- flush()：刷新输出流。
+- good()：判断流是否处于可用状态。
+- bad()：判断流是否处于错误状态。
+- fail()：判断流是否处于失败状态。
+- eof()：判断流是否已经到达文件末尾。
+
+这些成员函数可以用于对字符串流进行操作，比如向字符串流中插入数据、获取字符串流的内容、设置插入位置、刷新输出流等。在实际使用过程中，常见的操作包括将各种数据类型转换成字符串、将多个字符串拼接成一个完整的字符串、格式化输出等。通过使用这些成员函数，可以方便地实现这些操作，从而使代码更加简洁、易读、易维护。
+
+### 4. 其他概念
+
+#### errno
+
+`errno`是C/C++语言中的一个全局变量，它记录了最近一次发生错误的错误代码（通常是一个整数），由系统调用和某些库函数在发生错误时设置。通常情况下，当某个系统调用或库函数发生错误时，会将`errno`设置为一个非零值以表示出错原因的类型，程序员可以通过检查`errno`的值来确定错误的类型和发生的原因。`errno`的值是线程安全的，因为它是线程局部存储的。
+
+要使用`errno`，需要包含头文件`<errno.h>`（或在C++中使用`<cerrno>`）。在使用之前，需要先将它初始化为0。在发生错误时，需要检查`errno`的值，根据不同的错误类型采取不同的处理方式。常见的错误类型有：
+
+- `EACCES`：拒绝访问，通常发生在权限不足或文件不存在等情况下。
+- `EINVAL`：无效参数，通常发生在参数不正确或不合法等情况下。
+- `ENOENT`：未找到，通常发生在文件或目录不存在等情况下。
+- `ENOMEM`：内存不足，通常发生在申请内存失败等情况下。
+- `EINTR`：中断，通常发生在系统调用被中断时。
+
+#### 服务名
+
+服务名是一种可读性更好的网络端口号，用于标识网络上的服务。以下是一些常见的服务名：
+
+- FTP：文件传输协议
+- SSH：安全外壳协议
+- Telnet：远程终端协议
+- SMTP：简单邮件传输协议
+- HTTP：超文本传输协议
+- HTTPS：安全超文本传输协议
+- DNS：域名系统
+- SNMP：简单网络管理协议
+- NTP：网络时间协议
+- DHCP：动态主机配置协议
+- NFS：网络文件系统
+- SMB：服务器消息块协议（用于Windows文件共享）
+- LDAP：轻型目录访问协议
+
+这些服务名通常被映射到一些预定义的端口号，例如 HTTP 默认使用端口号 80，HTTPS 默认使用端口号 443。但是，服务名与端口号之间的映射并不是强制性的，也可以使用其他端口号来提供相应的服务。
+
+#### HTTP
+
+HTTP（超文本传输协议，Hypertext Transfer Protocol）是一种应用层协议，用于在Web应用程序之间传输数据。HTTP规定了浏览器和Web服务器之间的通信格式，包括请求和响应的格式、数据编码方式、错误处理等内容，是Web应用的基础协议。
+
+HTTP协议是指HTTP所定义的具体协议规范，包括HTTP请求和响应格式、HTTP状态码、请求方法、响应头部字段等内容。HTTP协议定义了客户端和服务器之间的通信协议，并规定了如何交换数据、如何处理错误和异常情况等。
+
+因此，HTTP是一个实际的应用协议，是Web应用程序中的一部分，而HTTP协议是一个抽象的协议定义，规范了HTTP协议中所需的各种元素和特性，是HTTP协议的正式文档。
+
+#### HTTPS
+
+HTTPS（全称：Hyper Text Transfer Protocol Secure）是一种安全的超文本传输协议，是在HTTP协议的基础上加入了SSL/TLS协议的加密和认证机制，用于保护网络通信安全。
+
+HTTPS的工作原理是在数据传输过程中加入SSL/TLS协议，通过公开密钥加密技术和数字证书认证机制，确保客户端和服务器之间的通信安全可靠。HTTPS使用加密算法对数据进行加密，保证数据传输过程中的机密性和完整性，同时使用数字证书对通信双方进行认证，确保通信双方的身份真实可信。
+
+HTTPS协议的主要优点是：
+
+1. 数据传输安全性：HTTPS使用加密技术保护数据传输过程中的机密性和完整性，有效防止数据被篡改或窃取。
+2. 通信双方身份认证：HTTPS使用数字证书认证机制对通信双方进行身份认证，确保通信双方的身份真实可信。
+3. 可信度高：HTTPS使用数字证书认证机制确保通信双方的身份真实可信，保证数据传输过程中的安全可靠性。
+
+因此，HTTPS广泛应用于涉及个人隐私和机密信息传输的场景，例如在线支付、网上购物、社交网络等。
+
+---
+
+HTTP和HTTPS之间的主要区别可以概括如下：
+
+1. 数据传输安全性：HTTP数据传输是明文传输的，不提供任何加密保护，容易被窃听和篡改；而HTTPS使用SSL/TLS加密协议进行数据传输，数据传输过程中的数据都是经过加密的，安全性更高。
+2. 通信方式：HTTP是无状态协议，每个请求都是独立的，服务器不会保留客户端的任何信息；而HTTPS支持会话状态保持，客户端与服务器之间可以保持一定的状态信息，从而提高通信效率。
+3. 端口号：HTTP默认使用端口号80，而HTTPS默认使用端口号443。
