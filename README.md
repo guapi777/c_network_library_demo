@@ -351,16 +351,17 @@ wslay可以与libev配合使用，以实现异步、非阻塞的WebSocket通信�
 - `send_callback`: 发送回调函数，用于在发送数据时进行回调。
 - `on_msg_recv_callback`: 消息接收完成回调函数，用于在消息接收完成后进行回调。
 
-#### wslay_frame
+#### wslay_event_on_msg_recv_arg
 
-`wslay_frame` 结构体定义了 WebSocket 数据帧的各种属性，包括：
+- `wslay_event_on_msg_recv_arg`，用于表示WebSocket事件处理器在接收到WebSocket消息时的回调函数参数。该结构体包含了以下成员变量：
 
-- `fin`：表示是否是最后一个分片。
-- `rsv`：表示保留位，用于扩展协议。
-- `opcode`：表示数据的类型，比如文本、二进制等。
-- `mask`：表示是否使用掩码。
-- `payload_length`：表示有效载荷的长度。
-- `payload`：指向有效载荷的指针。
+  1. `rsv`：WebSocket协议规定的保留位。该位占用3个比特位，其中最高位为RSV1，其次为RSV2，最低位为RSV3。WebSocket协议中规定这些位必须为0，如果不为0，则应该抛出一个异常或关闭WebSocket连接。
+  2. `opcode`：WebSocket消息的操作码。WebSocket协议定义了几种不同的操作码，用于表示不同类型的WebSocket消息，如文本消息、二进制消息、PING消息、PONG消息等等。
+  3. `msg`：指向接收到的WebSocket消息数据的指针。
+  4. `msg_length`：接收到的WebSocket消息数据的长度。
+  5. `status_code`：如果接收到的WebSocket消息的操作码为`WSLAY_CONNECTION_CLOSE`，则表示该消息包含了关闭WebSocket连接的状态码。如果该消息没有包含状态码，则该字段的值为0。
+
+  通过该结构体中的成员变量，WebSocket事件处理器可以获得接收到的消息数据、消息类型、消息的状态等信息，从而执行相应的操作。例如，可以根据消息类型判断接收到的是文本消息还是二进制数据，然后对其进行相应的解析和处理；如果接收到的是关闭连接的消息，则可以根据状态码判断关闭连接的原因，然后执行相应的处理。
 
 #### wslay_event_config 
 
@@ -399,7 +400,27 @@ struct wslay_event_callbacks {
 
 通过设置这些回调函数，我们可以在 WebSocket 连接中处理各种事件。例如，在 `on_msg_recv_callback` 中，我们可以处理完整的消息，然后在 `send_callback` 中发送响应。在 `on_close_callback` 中，我们可以清理资源并关闭连接。
 
+#### opcode
 
+```c++
+enum wslay_opcode {
+  WSLAY_CONTINUATION_FRAME = 0x0u,
+  WSLAY_TEXT_FRAME = 0x1u,
+  WSLAY_BINARY_FRAME = 0x2u,
+  WSLAY_CONNECTION_CLOSE = 0x8u,
+  WSLAY_PING = 0x9u,
+  WSLAY_PONG = 0xau
+};
+```
+
+opcode用于表示WebSocket消息的操作码。WebSocket协议定义了6种不同的操作码，分别如下：
+
+1. `WSLAY_CONTINUATION_FRAME`：表示一个消息分片的继续帧。在WebSocket协议中，一个大的消息可以分成多个小的消息分片发送，每个分片对应一个消息帧，其中第一个分片的帧的操作码为`WSLAY_TEXT_FRAME`或`WSLAY_BINARY_FRAME`，后续分片的帧的操作码为`WSLAY_CONTINUATION_FRAME`。
+2. `WSLAY_TEXT_FRAME`：表示一个文本消息帧。该帧包含了一段文本数据，用于在客户端和服务器之间传输文本信息。
+3. `WSLAY_BINARY_FRAME`：表示一个二进制数据消息帧。该帧包含了一段二进制数据，用于在客户端和服务器之间传输任意类型的数据。
+4. `WSLAY_CONNECTION_CLOSE`：表示一个关闭连接的控制帧。该帧用于关闭WebSocket连接，可以包含一个状态码和一个关闭原因。
+5. `WSLAY_PING`：表示一个PING控制帧。该帧用于检测WebSocket连接是否正常，服务器接收到该帧后应该立即回复一个PONG控制帧。
+6. `WSLAY_PONG`：表示一个PONG控制帧。该帧用于回复服务器发来的PING控制帧，以表明WebSocket连接正常。
 
 ### 2. methods
 
@@ -573,13 +594,97 @@ wslay_event_queue_msg()函数返回0表示成功，否则返回以下负错误�
 
 总之，该回调函数用于发送WebSocket协议消息的数据，是实现WebSocket通信的关键部分之一。在使用wslay库的过程中，需要编写合适的回调函数，以确保数据能够正确地发送和接收。
 
+#### 执行顺序
 
+- `wslay_event_recv_callback recv_callback`：当有数据可读时，将调用此回调函数。它用于接收数据并将其存储在应用程序的缓冲区中。
+- `wslay_event_send_callback send_callback`：当应用程序有数据要发送时，将调用此回调函数。它将应用程序中的数据发送到对端。
+- `wslay_event_genmask_callback genmask_callback`：此回调函数用于生成掩码。它将生成一个用于掩码的值并将其返回。
+- `wslay_event_on_frame_recv_start_callback on_frame_recv_start_callback`：当开始接收一个新的 WebSocket 帧时，将调用此回调函数。它用于处理帧的开始。
+- `wslay_event_on_frame_recv_chunk_callback on_frame_recv_chunk_callback`：当 WebSocket 帧的数据到达时，将调用此回调函数。它用于处理 WebSocket 帧中的数据块。
+- `wslay_event_on_frame_recv_end_callback on_frame_recv_end_callback`：当 WebSocket 帧接收完毕时，将调用此回调函数。它用于处理 WebSocket 帧的结束。
+- `wslay_event_on_msg_recv_callback on_msg_recv_callback`：当接收到完整的消息时，将调用此回调函数。它用于处理接收到的 WebSocket 消息。
+
+执行顺序通常是 `recv_callback` -> `on_frame_recv_start_callback` -> `on_frame_recv_chunk_callback` -> `on_frame_recv_end_callback` -> `on_msg_recv_callback` -> `send_callback`。其中 `genmask_callback` 可能在任何时候调用，因为在发送和接收 WebSocket 帧时都需要使用掩码。
 
 ### 3. binance webscoket
 
 参考于 https://binance-docs.github.io/apidocs/websocket_api/cn/ 
 
 
+
+### 4. Webscoket
+
+ #### body (payload)
+
+WebSocket的body，也称为payload，是指在WebSocket数据帧中传输的有效载荷数据。在WebSocket协议中，数据传输被分割成多个帧，每个帧包含一个标头和一个数据体，其中数据体就是指body或payload。
+
+WebSocket中的数据帧由两部分组成：帧头和帧体。帧头包含了一些控制信息，如FIN、RSV、Opcode、MASK等。而帧体就是指实际传输的数据，也就是payload或body。
+
+在WebSocket数据传输中，body可以是二进制数据或文本数据。对于文本数据，body通常是一个UTF-8编码的字符串；对于二进制数据，可以是任何字节序列。在WebSocket数据帧中，payload的长度是有限制的，最大长度由WebSocket协议中的最大帧大小（Maximum Frame Size）定义，通常为2^63-1个字节。
+
+
+
+## epoll
+
+### 1. structs
+
+#### epool_data
+
+```c
+typedef union epoll_data {
+    void    *ptr;
+    int      fd;
+    uint32_t u32;
+    uint64_t u64;
+} epoll_data_t;
+
+```
+
+
+
+#### epool_event
+
+```c
+struct epoll_event {
+    uint32_t     events;    /* Epoll events */
+    epoll_data_t data;      /* User data variable */
+};
+```
+
+`epoll_event`是用于`epoll`系统调用的事件结构体，定义在`sys/epoll.h`头文件中。
+
+该结构体有以下成员变量：
+
+- `uint32_t events`：用于描述`epoll`事件的类型，可以是以下类型之一或者它们的组合：
+  - `EPOLLIN`：表示对应的文件描述符可以读取数据（即读事件）；
+  - `EPOLLOUT`：表示对应的文件描述符可以写入数据（即写事件）；
+  - `EPOLLRDHUP`：表示对端已经关闭连接（即TCP连接的读半部分关闭）；
+  - `EPOLLPRI`：表示对应的文件描述符有紧急数据可读（即带外数据）；
+  - `EPOLLERR`：表示对应的文件描述符发生错误（即错误事件）；
+  - `EPOLLHUP`：表示对应的文件描述符发生挂起（即挂起事件）；
+  - `EPOLLET`：表示采用边缘触发模式（edge-triggered）；
+  - `EPOLLONESHOT`：表示采用一次性事件模式（one-shot）。
+- `epoll_data_t data`：用于存储用户数据的联合体
+
+可以使用`epoll_ctl`系统调用来向`epoll`实例中添加、修改或删除事件，使用`epoll_wait`系统调用来等待事件发生并返回事件列表。例如，以下代码创建了一个`epoll`实例，并将标准输入（`stdin`）的读事件添加到该实例中
+
+### 2. methods
+
+#### epoll_ctrl()
+
+`epoll_ctl` 是 Linux 系统下的一个系统调用函数，用于控制一个 epoll 实例（通过文件描述符 `epfd` 标识）上的文件描述符（通过参数 `fd` 标识）的事件监听状态。`epoll_ctl` 的作用是向 epoll 实例中添加、修改或删除一个待监听的文件描述符。
+
+`epoll_ctl` 的输入参数包括：
+
+- `int epfd`：epoll 实例的文件描述符。
+- `int op`：操作类型，可以是 `EPOLL_CTL_ADD`（添加监听事件）、`EPOLL_CTL_MOD`（修改监听事件）或 `EPOLL_CTL_DEL`（删除监听事件）。
+  - `EPOLL_CTL_ADD`：将一个文件描述符添加到 epoll 监听列表中；
+  - `EPOLL_CTL_DEL`：将一个文件描述符从 epoll 监听列表中删除；
+  - `EPOLL_CTL_MOD`：修改一个文件描述符在 epoll 监听列表中的事件类型或者 `epoll_event` 结构体中的数据。
+- `int fd`：待监听的文件描述符。
+- `struct epoll_event *event`：事件结构体指针，用于设置待监听的事件类型和其他参数。
+
+`epoll_ctl` 的输出为整型，返回值表示操作是否成功。返回值为 0 表示成功，返回值为 -1 表示失败，具体错误信息可以通过 `errno` 全局变量获取。
 
 ## nghttp2
 
@@ -689,7 +794,7 @@ struct sockaddr {
 
 ```c
 int getaddrinfo(const char *node, const char *service,
-                const struct addrinfo *hints, struct addrinfo **res);
+          const struct addrinfo *hints, struct addrinfo **res);
 ```
 
 `getaddrinfo()` 方法是一个用于获取网络地址信息的函数，它可以根据给定的主机名、服务名或者地址信息结构体，返回一个或多个可用的地址信息列表。该函数定义在头文件 `<sys/socket.h>` 和 `<netdb.h>` 中
@@ -851,6 +956,130 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 
 函数返回值为 0 表示成功，否则表示失败。
 
+#### fcntl()
+
+在UNIX和类UNIX系统中，fcntl()是一个系统调用函数，用于对文件描述符（file descriptor）进行控制操作。fcntl()函数提供了一些功能，包括：
+
+1. 获取和设置文件描述符的属性，如文件状态标志（file status flags）、文件读写位置（file offset）、文件锁（file locks）等；
+2. 控制文件描述符的非阻塞模式，使得在读写文件时不会阻塞等待；
+3. 复制文件描述符；
+4. 改变文件描述符的属性，如关闭文件描述符、设置文件描述符为执行时关闭等。
+
+`fcntl()`函数的输入参数有：
+
+1. 文件描述符fd：需要进行控制操作的文件描述符；
+2. cmd：控制操作的命令，如获取/设置文件描述符属性、获取/设置文件锁等；
+3. arg：cmd命令的参数，如设置文件描述符属性时的文件状态标志、文件读写位置等；
+
+返回值：执行成功返回0，否则返回-1，并设置errno来表示错误信息。
+
+#### strtol()
+
+`strtol()`是C语言标准库中的一个函数，用于将一个字符串转换为长整型数值（`long int`）。该函数的声明在头文件 `<stdlib.h>` 中，其函数原型如下：
+
+```c
+long int strtol(const char *str, char **endptr, int base);
+```
+
+`str` 参数是要被转换的字符串，`endptr` 是一个指向字符指针的指针，它会被设置为指向字符串中第一个无法被转换的字符的位置（如果整个字符串都能被转换，则指向字符串的末尾）。`base` 参数表示转换时使用的进制，可以是 2、8、10 或 16。
+
+`strtol()` 函数返回被转换后的长整型数值。
+
+以下是一个使用 `strtol()` 函数的示例：
+
+```c
+#include <stdlib.h>
+#include <stdio.h>
+
+int main(void)
+{
+    char str[] = "12345";
+    char *endptr;
+    long int num;
+
+    num = strtol(str, &endptr, 10);
+    printf("The number is: %ld\n", num);
+    printf("The first non-numeric character is: %c\n", *endptr);
+
+    return 0;
+}
+```
+
+该程序的输出为：
+
+```c
+//sqlCopy codeThe number is: 12345
+//The first non-numeric character is: 
+```
+
+在上面的示例中，`strtol()` 函数将字符串 "12345" 转换为长整型数值 12345，并将 `endptr` 指向字符串末尾的空字符。
+
+#### setsockopt()
+
+`setsockopt()` 是一个在 Berkeley sockets 接口中定义的函数，用于设置套接字（socket）的选项。该函数在 `<sys/socket.h>` 头文件中声明，其函数原型如下：
+
+```c++
+int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+```
+
+各个参数的含义如下：
+
+- `sockfd`：指定需要设置选项的套接字描述符；
+- `level`：指定需要设置的选项的协议层。常见的协议层包括 `SOL_SOCKET`、`IPPROTO_TCP`、`IPPROTO_IP` 等；
+- `optname`：指定需要设置的选项名；
+- `optval`：指向存放选项值的缓冲区；
+- `optlen`：指定选项值的长度。
+
+`setsockopt()` 函数的作用是设置套接字的某些选项，如超时时间、发送和接收缓冲区大小、是否启用 TCP_NODELAY 等。这些选项可以影响套接字的行为和性能，允许程序对套接字进行更加细粒度的控制。
+
+以下是一个使用 `setsockopt()` 函数设置套接字选项的示例：
+
+```c++
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <stdio.h>
+
+int main()
+{
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        perror("socket");
+        return 1;
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
+        perror("setsockopt");
+        close(sockfd);
+        return 1;
+    }
+
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(80);
+    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
+        perror("inet_pton");
+        close(sockfd);
+        return 1;
+    }
+
+    if (connect(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        perror("connect");
+        close(sockfd);
+        return 1;
+    }
+
+    close(sockfd);
+    return 0;
+}
+```
+
+该程序创建了一个 TCP 套接字，并将其连接到本地 IP 地址为 127.0.0.1、端口号为 80 的服务器上。在连接之前，通过 `setsockopt()` 函数设置了 SO_RCVTIMEO 选项，该选项指定套接字接收数据时的超时时间为 5 秒。如果在 5 秒内没有接收到数据，则接收操作会返回一个错误。
+
 ### 3.class
 
 #### string
@@ -878,6 +1107,36 @@ int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact)
 
 需要注意的是，`string` 类的成员变量和实现细节在不同的编译器和操作系统下可能有所不同，上述只是其中的一些常见成员变量和函数。
 
+##### assign()
+
+```c
+std::string s = "hello";
+std::string str = "world";
+s.assign(str.begin(), str.end());
+// 等价于 s = str;
+// 执行完上述代码后，s的值将变为"world"
+```
+
+这是C++标准库`std::basic_string`模板类中的成员函数`assign`的实现，其中`basic_string`可能是`std::string`或者`std::wstring`等类型的基类模板。
+
+该函数的作用是将当前字符串对象中的所有字符替换成从迭代器`__first`到`__last`范围内的字符序列。具体来说，该函数会调用`replace`成员函数，将当前字符串对象中的所有字符替换成从迭代器`__first`到`__last`范围内的字符序列，并返回替换后的字符串对象的引用。
+
+##### append()
+
+```c++
+std::string s = "hello";
+std::string str = "world";
+s.append(str.begin(), str.end());
+// 等价于 s += str;
+// 执行完上述代码后，s的值将变为"helloworld"
+```
+
+这是C++标准库`std::basic_string`模板类中的成员函数`append`的实现，其中`basic_string`可能是`std::string`或者`std::wstring`等类型的基类模板。
+
+该函数的作用是将从迭代器`__first`到`__last`范围内的字符序列添加到当前字符串对象的末尾。具体来说，该函数会调用`replace`成员函数，将从当前字符串对象的末尾位置开始的一个空字符序列替换成从迭代器`__first`到`__last`范围内的字符序列，并返回替换后的字符串对象的引用。
+
+
+
 #### ostringstream
 
 ostringstream 是 C++ 标准库中的一个类，定义在头文件 <sstream> 中，它是一个流类，用于将各种数据类型转换成字符串。ostringstream 通常用于将各种类型的数据格式化成字符串，比如将数字转换成字符串，将变量和字符串拼接成一个完整的字符串等。
@@ -900,6 +1159,28 @@ ostringstream 常见的成员函数包括：
 - eof()：判断流是否已经到达文件末尾。
 
 这些成员函数可以用于对字符串流进行操作，比如向字符串流中插入数据、获取字符串流的内容、设置插入位置、刷新输出流等。在实际使用过程中，常见的操作包括将各种数据类型转换成字符串、将多个字符串拼接成一个完整的字符串、格式化输出等。通过使用这些成员函数，可以方便地实现这些操作，从而使代码更加简洁、易读、易维护。
+
+#### fstream
+
+`fstream` 是 C++ 中用于读写文件的流类之一，继承自 `iostream` 类。它支持文件的读写、追加写入等操作，并且可以处理二进制数据和文本数据。
+
+下面是 `fstream` 类的一些常用成员方法：
+
+- `open()`：打开一个文件，并关联一个流；
+- `close()`：关闭当前打开的文件；
+- `is_open()`：判断文件是否已经打开；
+- `eof()`：判断文件是否已经到达文件尾部；
+- `fail()`：判断是否发生了错误；
+- `tellg()`：获取当前读取位置；
+- `seekg()`：设置当前读取位置；
+- `tellp()`：获取当前写入位置；
+- `seekp()`：设置当前写入位置；
+- `write()`：将二进制数据写入文件；
+- `read()`：从文件读取二进制数据；
+- `operator<<()`：将数据以文本格式写入文件；
+- `operator>>()：从文件读取文本格式的数据。
+
+需要注意的是，`fstream` 类同时继承了 `istream` 和 `ostream` 类，因此可以直接使用 `<<` 和 `>>` 运算符来读写文本格式的数据。而且，`fstream` 类还支持文件的定位和截取等高级操作。
 
 ### 4. 其他概念
 
