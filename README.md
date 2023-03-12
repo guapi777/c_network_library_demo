@@ -931,7 +931,42 @@ llhttp_init() 用于初始化 llhttp_t 解析器对象。它需要三个参数�
 
 该方法返回HTTP状态的文本名称。
 
+#### void llhttp_set_lenient_headers(llhttp_t* parser, int enabled)
 
+- 作用：开启/关闭宽松的报头值解析，以支持高度不兼容的客户端/服务器。
+- 参数：
+  - parser：指向解析器实例的指针。
+  - enabled：启用（1）或禁用（0）宽松解析。
+- 注意事项：启用宽松解析后，不会因为不正确的报头值而触发 HPE_INVALID_HEADER_TOKEN 错误。
+
+#### void llhttp_set_lenient_chunked_length(llhttp_t* parser, int enabled)
+
+- 作用：开启/关闭对传输编码（Transfer-Encoding）和内容长度（Content-Length）头信息冲突的宽松处理。
+- 参数：
+  - parser：指向解析器实例的指针。
+  - enabled：启用（1）或禁用（0）宽松处理。
+- 注意事项：通常情况下，当传输编码和内容长度同时存在时，llhttp 会报错。这个错误对于防止 HTTP 请求欺骗攻击很重要，但某些情况下可能不太理想。
+
+#### void llhttp_set_lenient_keep_alive(llhttp_t* parser, int enabled)
+
+- 作用：开启/关闭对 Connection: close 和 HTTP/1.0 请求/响应的宽松处理。
+- 参数：
+  - parser：指向解析器实例的指针。
+  - enabled：启用（1）或禁用（0）宽松处理。
+- 注意事项：
+  - 通常情况下，当请求/响应中包含 Connection: close 和 Content-Length 时，llhttp 会报错（在严格模式下）或忽略该请求/响应（在宽松模式下）。
+  - 这个错误对于防止缓存污染攻击很重要，但与过时和不安全的客户端可能不兼容。
+  - 启用此标志后，额外的请求/响应将被正常解析。
+
+#### void llhttp_set_lenient_transfer_encoding(llhttp_t* parser, int enabled)
+
+- 作用：开启/关闭对传输编码头的宽松处理。
+- 参数：
+  - parser：指向解析器实例的指针。
+  - enabled：启用（1）或禁用（0）宽松处理。
+- 注意事项：
+  - 通常情况下，当传输编码头的值为 chunked 且其后还有其他值时（无论是在单个报头中还是在值内部使用逗号分隔的多个报头中），llhttp 会报错。
+  - 这是为了可靠地确定请求体大小，从而避免请求欺骗。
 
 ## kernel bypass
 
@@ -939,7 +974,7 @@ Kernel bypass（内核旁路）是一种网络协议栈的设计方法，旨在�
 
 传统的网络协议栈通常是由操作系统内核负责管理和处理的，每个数据包都需要经过多个内核层进行处理和转发。这种方式的好处是方便管理和维护，但是在高负载和高并发的情况下，会对系统性能造成很大的影响。
 
-通过Kernel bypass技术，网络数据包可以直接从网卡上读取和写入，避免了内核层的处理，提高了系统的性能和吞吐量。这种方法通常需要使用专门的硬件设备或驱动程序来实现，并且需要针对不同的硬件平台和网络协议进行优化和调整。常见的Kernel bypass实现方式包括DPDK、Netmap、XDP等。
+通过Kernel bypass技术，网络数据包可以直接从网卡上读取和写入，避免了内核层的处理，提高了系统的性能和吞吐量。这种方法通常需要使用专门的硬件设备或驱动程序来实现，并且需要针对不同的硬件平台和网络协议进行优化和调整。常见的Kernel bypass实现方式包括DPDK、Netmap、XDP等。 
 
 ## others
 
