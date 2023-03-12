@@ -712,6 +712,227 @@ llhttp支持HTTP/1.0和HTTP/1.1协议，并且可以使用不同的解析模式�
 
 由于llhttp是用C编写的，因此它可以与多种编程语言进行集成，例如Node.js、Python、Ruby、Java和C#等。
 
+### 1.structs
+
+#### llhttp_t
+
+`llhttp_t` 是 `llhttp` 解析器的主要数据结构，它包含了所有的解析器状态和相关信息。`llhttp_t` 类型定义在 `llhttp.h` 头文件中。
+
+- `_index`: 当前解析到的字节数组的下标位置。
+- `_span_pos0` 和 `_span_cb0`: 用于解析请求头部中的字段名称和字段值的指针。
+- `error`: 表示解析过程中是否发生错误，0 表示没有错误，非零值表示有错误。
+- `reason`: 如果出现错误，表示错误的原因字符串。
+- `error_pos`: 如果出现错误，表示错误发生的位置。
+- `data`: 用于存储应用程序的上下文信息，可以在 `llhttp_settings` 中指定。
+- `_current`: 用于解析请求头部时，表示当前正在解析的字段的类型。
+- `content_length`: 如果解析到了 `Content-Length` 头部字段，表示消息体的长度。
+- `type`: 当前正在解析的 HTTP 消息的类型，可以是 `HTTP_REQUEST`、`HTTP_RESPONSE` 或者 `HTTP_BOTH`。
+- `method`: 如果解析的是 HTTP 请求消息，表示请求方法的类型。
+- `http_major` 和 `http_minor`: 表示当前正在解析的 HTTP 版本号。
+- `header_state`: 表示当前正在解析请求头部的哪个部分，可以是 `HEADER_STATE_GENERAL`、`HEADER_STATE_CONNECTION`、`HEADER_STATE_CONTENT_LENGTH` 等。
+- `lenient_flags`: 用于控制解析器的严格程度，如果为 `LLHTTP_LENIENT_FLAGS_ALLOW_EOF` 则表示允许消息体结束前出现 EOF。
+- `upgrade`: 如果解析到了 `Upgrade` 头部字段，表示是否要升级协议。
+- `finish`: 表示解析是否已经完成。
+- `flags`: 各种状态标志的组合，包括 `F_CHUNKED`、`F_CONTENTLENGTH`、`F_SKIPBODY`、`F_TRAILING` 等。
+- `status_code`: 如果解析的是 HTTP 响应消息，表示响应状态码。
+- `initial_message_completed`: 表示解析的 HTTP 消息是否已经完成。
+- `settings`: 指向 `llhttp_settings` 结构体的指针，包含了一些回调函数和其他解析器的配置选项。
+
+#### llhttp_setting_t
+
+llhttp_settings_t 是一个结构体，用于存储 HTTP 解析器的回调函数。
+
+它包含以下的回调函数，这些回调函数可以返回 0（正常继续解析）、-1（解析出错）或 HPE_PAUSED（暂停解析）：
+
+- on_message_begin: 当开始一个新的请求/响应时调用。
+- on_message_complete: 当一个请求/响应已经被完整解析后调用。
+- on_url_complete: 在 URL 解析完成后调用。
+- on_method_complete: 在 HTTP 方法解析完成后调用。
+- on_version_complete: 在 HTTP 版本解析完成后调用。
+- on_status_complete: 在状态码解析完成后调用。
+- on_header_field_complete: 在解析完一个 header 名称后调用。
+- on_header_value_complete: 在解析完一个 header 值后调用。
+- on_chunk_header: 在开始一个新的 chunk 时调用。当前 chunk 的长度存储在 parser->content_length 中。
+- on_chunk_extension_name_complete: 在开始一个 chunk extension name 后调用。
+- on_chunk_extension_value_complete: 在开始一个 chunk extension value 后调用。
+- on_chunk_complete: 在接收到一个新的 chunk 后调用。
+- on_reset: 在 on_message_complete 之后、on_message_begin 之前，在同一解析器上接收到新消息时调用。这不适用于解析器的第一条消息。
+
+以下回调函数可以返回 0（正常继续解析）、-1（解析出错）或 HPE_USER（来自回调的错误）：
+
+- on_url: 在接收到 URL 的另一个字符时调用。
+- on_status: 在接收到状态的另一个字符时调用。
+- on_method: 在接收到方法的另一个字符时调用。当创建的解析器使用 HTTP_BOTH 且输入为响应时，也会在第一条消息的序列 HTTP/ 上调用此函数。
+- on_version: 在接收到版本的另一个字符时调用。
+- on_header_field: 在接收到 header 名称的另一个字符时调用。
+- on_header_value: 在接收到 header 值的另一个字符时调用。
+- on_chunk_extension_name: 在接收到 chunk extension name 的另一个字符时调用。
+- on_chunk_extension_value: 在接收到 extension value 的另一个字符时调用。
+
+回调函数 on_headers_complete 在头部解析完成后被调用，可以返回以下值：
+
+- 0：正常继续解析。
+- 1：假定请求/响应没有主体，继续解析下一条消息。
+- 2：假定没有主体（与上述相同），使 llhttp_execute() 返回 HPE_PAUSED_UPGRADE。
+- -1：错误
+- HPE_PAUSED：暂停解析。
+
+#### llhttp_errno
+
+这是一个枚举类型，表示 `llhttp` 库的错误码。具体每个错误码的含义如下：
+
+- `HPE_OK`：没有错误。
+- `HPE_INTERNAL`：`llhttp` 内部错误。
+- `HPE_STRICT`：解析器被要求在严格模式下运行，但输入数据不符合规范。
+- `HPE_CR_EXPECTED`：解析器期望收到一个回车符（`\r`），但没有收到。
+- `HPE_LF_EXPECTED`：解析器期望收到一个换行符（`\n`），但没有收到。
+- `HPE_UNEXPECTED_CONTENT_LENGTH`：HTTP 报文中同时出现了 `Content-Length` 和 `Transfer-Encoding` 头部。
+- `HPE_UNEXPECTED_SPACE`：解析器不期望在当前位置出现空格。
+- `HPE_CLOSED_CONNECTION`：连接已关闭。
+- `HPE_INVALID_METHOD`：HTTP 方法无效。
+- `HPE_INVALID_URL`：URL 无效。
+- `HPE_INVALID_CONSTANT`：HTTP 报文中的常量无效。
+- `HPE_INVALID_VERSION`：HTTP 版本号无效。
+- `HPE_INVALID_HEADER_TOKEN`：HTTP 头部字段无效。
+- `HPE_INVALID_CONTENT_LENGTH`：HTTP 报文中的 `Content-Length` 头部无效。
+- `HPE_INVALID_CHUNK_SIZE`：HTTP 报文中的块大小无效。
+- `HPE_INVALID_STATUS`：HTTP 状态码无效。
+- `HPE_INVALID_EOF_STATE`：解析器在解析请求主体时处于错误状态。
+- `HPE_INVALID_TRANSFER_ENCODING`：HTTP 报文中的 `Transfer-Encoding` 头部无效。
+- `HPE_CB_MESSAGE_BEGIN`：回调函数 `on_message_begin` 返回错误。
+- `HPE_CB_HEADERS_COMPLETE`：回调函数 `on_headers_complete` 返回错误。
+- `HPE_CB_MESSAGE_COMPLETE`：回调函数 `on_message_complete` 返回错误。
+- `HPE_CB_CHUNK_HEADER`：回调函数 `on_chunk_header` 返回错误。
+- `HPE_CB_CHUNK_COMPLETE`：回调函数 `on_chunk_complete` 返回错误。
+- `HPE_PAUSED`：解析器已被暂停，需要再次调用 `llhttp_execute` 来继续解析。
+- `HPE_PAUSED_UPGRADE`：HTTP 升级过程中解析器被暂停。
+- `HPE_PAUSED_H2_UPGRADE`：HTTP/2 升级过程中解析器被暂停。
+- `HPE_USER`：回调函数返回了一个自定义错误码。
+- `HPE_CB_URL_COMPLETE`：回调函数 `on_url_complete` 返回错误。
+- `HPE_CB_STATUS_COMPLETE`：回调函数 `on_status_complete` 返回错误。
+- `HPE_CB_METHOD_COMPLETE`：回调函数 `on_method_complete` 返回错误。
+- `HPE_CB_VERSION_COMPLETE`：回调函数 `on_version_complete` 返回错误。
+- `HPE_CB_HEADER_FIELD_COMPLETE`：回调函数 `on_header_field_complete` 返回错误。
+- `HPE_CB_HEADER_VALUE_COMPLETE`：回调函数 `on_header_value_complete` 返回错误。
+- `HPE_CB_CHUNK_EXTENSION_NAME_COMPLETE`：在解析分块编码的数据时，当分块扩展名结束时调用回调函数返回错误。
+- `HPE_CB_CHUNK_EXTENSION_VALUE_COMPLETE`：在解析分块编码的数据时，当分块扩展值结束时调用回调函数返回错误。
+- `HPE_CB_METHOD_COMPLETE`：在解析 HTTP 请求方法时调用回调函数返回错误。
+- `HPE_CB_VERSION_COMPLETE`：在解析 HTTP 版本号时调用回调函数返回错误。
+- `HPE_CB_RESET`：在解析器已经处理完上一个请求或响应并准备开始新的请求或响应之前调用回调函数返回错误。
+
+### 2.methods
+
+#### llhttp_init()
+
+llhttp_init() 用于初始化 llhttp_t 解析器对象。它需要三个参数：
+
+1. parser：指向要初始化的 llhttp_t 对象的指针。
+2. type：指定解析器类型，可选的类型有：HTTP_REQUEST、HTTP_RESPONSE 和 HTTP_BOTH。
+   1. HTTP_REQUEST类型用于解析HTTP请求报文，
+   2. HTTP_RESPONSE类型用于解析HTTP响应报文，
+   3. HTTP_BOTH类型用于解析websocket连接，但它也可以用于解析HTTP请求和响应。
+3. settings：指向 llhttp_settings_t 结构的指针，该结构包含一组回调函数，定义了解析器的行为。此结构必须在解析器对象的生命周期内有效。
+
+该函数不返回任何值，它的作用是将解析器对象和回调函数关联起来，以便解析器在解析 HTTP 消息时调用这些回调函数。
+
+#### llhttp_execute()
+
+`llhttp_execute()` 是一个解析 HTTP 数据的函数，输入为解析器 `llhttp_t` 和要解析的数据 `data` 和数据长度 `len`，输出为解析器的状态码 `llhttp_errno_t`。
+
+当调用 `llhttp_execute()` 时，解析器会根据当前状态和传入的数据进行解析。如果解析成功，解析器会自动更新其内部状态，并返回状态码 `HPE_OK`。如果解析失败，则会返回相应的错误状态码，如 `HPE_INVALID_HEADER_TOKEN`、`HPE_INVALID_METHOD` 等。
+
+在解析时，解析器还会调用用户提供的回调函数，如 `on_url()`、`on_body()` 等，以便用户处理解析得到的数据。
+
+注意，在解析过程中，解析器可能会返回 `HPE_PAUSED`，表示当前数据不足以完成解析，需要等待更多数据。此时用户应该等待数据到达后再次调用 `llhttp_execute()` 函数进行解析。
+
+解析完整或部分请求/响应，在此过程中调用用户回调函数。如果 llhttp_data_cb 返回的 errno 不等于 HPE_OK，则解析中断，并从 llhttp_execute() 返回该 errno。如果使用了 HPE_PAUSED 作为 errno，则可以使用 llhttp_resume() 调用继续执行。在 CONNECT/Upgrade 请求/响应的特殊情况下，解析请求/响应后会返回 HPE_PAUSED_UPGRADE。如果用户希望继续解析，需要调用 llhttp_resume_after_upgrade()。
+
+#### llhttp_get_type(llhttp_t* parser)
+
+`llhttp_get_type(llhttp_t* parser)`: 返回解析器的类型，即 llhttp_type_t 类型的值。
+
+#### llhttp_get_http_major(llhttp_t* parser)
+
+`llhttp_get_http_major(llhttp_t* parser)`: 返回当前请求/响应使用的 HTTP 协议的主版本号。
+
+#### llhttp_get_http_minor(llhttp_t* parser)
+
+`llhttp_get_http_minor(llhttp_t* parser)`: 返回当前请求/响应使用的 HTTP 协议的次版本号。
+
+#### llhttp_get_method(llhttp_t* parser)
+
+`llhttp_get_method(llhttp_t* parser)`: 返回当前请求的方法，使用 uint8_t 类型的值表示。
+
+#### llhttp_get_status_code(llhttp_t* parser)
+
+`llhttp_get_status_code(llhttp_t* parser)`: 返回当前响应的状态码，使用 int 类型的值表示。
+
+#### llhttp_get_upgrade(llhttp_t* parser)
+
+`llhttp_get_upgrade(llhttp_t* parser)`: 如果请求包含 Connection: upgrade 标头，则返回 1。
+
+#### llhttp_reset(llhttp_t* parser)
+
+`llhttp_reset(llhttp_t* parser)`: 重置已初始化的解析器，回到初始状态，保留现有的解析器类型、回调设置、用户数据和宽松标志。
+
+#### llhttp_settings_init(llhttp_settings_t* settings)
+
+`llhttp_settings_init(llhttp_settings_t* settings)`: 初始化设置对象。
+
+#### llhttp_finish(llhttp_t* parser)
+
+`llhttp_finish(llhttp_t* parser)`: 当另一侧没有更多字节要发送时（例如，TCP 连接的可读端关闭时），应调用此方法。没有 Content-Length 的请求和其他消息可能需要将所有传入的字节视为消息体的一部分，直到连接的最后一个字节。如果请求安全终止，此方法将调用 on_message_complete() 回调。否则，将返回错误代码。
+
+#### llhttp_message_needs_eof(const llhttp_t* parser)
+
+`llhttp_message_needs_eof(const llhttp_t* parser)`: 如果解析到了消息的最后一个字节并且必须通过在 EOF 上调用 llhttp_finish() 来完成该消息，则返回 1。
+
+#### llhttp_should_keep_alive(const llhttp_t* parser)
+
+`llhttp_should_keep_alive(const llhttp_t* parser)`: 如果可能还有其他成功解析的消息，则返回 1。
+
+#### void llhttp_pause(llhttp_t* parser)
+
+`void llhttp_pause(llhttp_t* parser)`该方法用于暂停解析器，使后续调用`llhttp_execute()`返回`HPE_PAUSED`错误并设置相应的错误原因。注意，该方法不能从用户回调函数中调用，用户回调函数应该返回`HPE_PAUSED`以请求暂停。
+
+#### void llhttp_resume(llhttp_t* parser)
+
+`void llhttp_resume(llhttp_t* parser)`该方法用于在用户回调函数暂停后恢复解析器执行。只有在调用`llhttp_execute()`返回`HPE_PAUSED`时才能调用该方法。详见`llhttp_execute()`方法。
+
+#### void llhttp_resume_after_upgrade(llhttp_t* parser)
+
+该方法用于在用户回调函数暂停后恢复解析器执行。只有在调用`llhttp_execute()`返回`HPE_PAUSED_UPGRADE`时才能调用该方法。详见`llhttp_execute()`方法。
+
+#### llhttp_errno_t llhttp_get_errno(const llhttp_t* parser)
+
+该方法返回最近的错误。
+
+#### const char* llhttp_get_error_reason(const llhttp_t* parser)
+
+该方法返回最近返回错误的文字解释。用户回调函数应该在返回错误之前设置错误原因。详见`llhttp_set_error_reason()`方法。
+
+#### void llhttp_set_error_reason(llhttp_t* parser, const char* reason)
+
+该方法为返回的错误分配文字描述。必须在用户回调函数返回错误码之前调用该方法。`HPE_USER`错误代码在用户回调函数中可能会有用。
+
+#### const char* llhttp_get_error_pos(const llhttp_t* parser)
+
+该方法返回上次解析的字节的指针，该指针相对于`llhttp_execute()`的`data`参数。该方法对于计算已解析的字节数可能很有用。
+
+#### const char* llhttp_errno_name(llhttp_errno_t err)
+
+该方法返回错误代码的文本名称。
+
+#### const char* llhttp_method_name(llhttp_method_t method)
+
+该方法返回HTTP方法的文本名称。
+
+#### const char* llhttp_status_name(llhttp_status_t status)
+
+该方法返回HTTP状态的文本名称。
+
+
+
 ## kernel bypass
 
 Kernel bypass（内核旁路）是一种网络协议栈的设计方法，旨在绕过操作系统内核的网络协议处理，直接将数据传输到网卡上进行处理。这种方法可以极大地提高网络性能和吞吐量，特别是在高负载、高并发的网络环境中。
